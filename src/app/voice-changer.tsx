@@ -27,6 +27,12 @@ export function VoiceChanger() {
       return;
     }
 
+    // Check if text exceeds 500 characters
+    if (text.length > 500) {
+      toast.error("Text exceeds the 500 character limit");
+      return;
+    }
+
     try {
       setIsGenerating(true);
       setAudioUrl(null);
@@ -35,21 +41,44 @@ export function VoiceChanger() {
 
       console.log("Generating audio for text:", text);
 
-      // Use our proxy API instead of calling ElevenLabs directly
-      const response = await fetch('/api/text-to-speech', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+      // Prepare the payload for ElevenLabs API
+      const payload = {
+        model_id: "eleven_multilingual_v2",
+        text: text,
+        voice_settings: {
+          speed: speed || 1,
         },
-        body: JSON.stringify({
-          voiceId,
-          text,
-          speed,
-        }),
-      });
+      };
 
-      console.log("API response status:", response.status);
-      console.log("API response headers:", Object.fromEntries(response.headers.entries()));
+      // Call ElevenLabs API directly
+      let response = await fetch(
+        `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?allow_unauthenticated=1`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Origin': 'https://elevenlabs.io',
+            'Referer': 'https://elevenlabs.io/',
+          },
+          body: JSON.stringify(payload),
+        }
+      );
+
+      // If the standard endpoint fails, try the one with timestamps
+      if (!response.ok) {
+        response = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream?allow_unauthenticated=1`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Origin': 'https://elevenlabs.io',
+              'Referer': 'https://elevenlabs.io/',
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+      }
 
       if (!response.ok) {
         let errorData;
@@ -153,6 +182,7 @@ export function VoiceChanger() {
               ))}
             </SelectContent>
           </Select>
+          <p className="text-xs text-muted-foreground mt-1">Uses Multilingual v2 (the most advanced model of ElevenLabs)</p>
         </div>
 
         <div className="space-y-2">
@@ -161,17 +191,18 @@ export function VoiceChanger() {
           </label>
           <Slider
             id="speed"
-            min={0.5}
-            max={2}
+            min={0.70}
+            max={1.20}
             step={0.1}
             value={[speed]}
             onValueChange={(value) => setSpeed(value[0])}
           />
+          <p className="text-xs text-muted-foreground mt-1">Default is 1.0</p>
         </div>
 
         <div className="space-y-2">
           <label htmlFor="text" className="text-sm font-medium">
-            Text <span className="text-xs text-muted-foreground">({text.length} / 1000 characters)</span>
+            Text <span className="text-xs text-muted-foreground">({text.length} / 500 characters)</span>
           </label>
           <Textarea
             id="text"
@@ -179,8 +210,9 @@ export function VoiceChanger() {
             value={text}
             onChange={(e) => setText(e.target.value)}
             className="min-h-[120px]"
-            maxLength={1000}
+            maxLength={500}
           />
+          <p className="text-xs text-muted-foreground">You can generate unlimited audio with a limit of 500 characters per text</p>
         </div>
 
         {audioUrl && (
